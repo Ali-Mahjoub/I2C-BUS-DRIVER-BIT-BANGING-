@@ -1,22 +1,18 @@
-# MPU6050-Device-Driver
+# I2C-BUS-DRIVER(BIT-BANGING)
+![results_1](https://github.com/Ali-Mahjoub/azertyu/blob/main/images/images.jpg)
 
 <!-- TABLE OF CONTENTS -->
 <details open="open">
   <summary>Table of Contents</summary>
   <ol>
-    <li><a href="#about-the-project">About The Project</a></li>  
-    <li><a href="#software-requirements">Software Requirements</a></li>
+    <li><a href="#introduction">Introduction</a></li>  
+    <li><a href="#walking-through-the-code">Walking through the code</a></li>
       <ul>
-        <li><a href="#python-environment">Python environment</a></li>
-        <li><a href="#packages">Packages</a></li>
+        <li><a href="#apis-used-for-the-i2c-bus-driver"> APIs used for the I2C bus driver</a></li>
+        <li><a href="#implementation-of-the-i2c-communication-by-using-the-bitbanging-method">Implementation of the I2C communication by using the bit-banging method</a></li>
       </ul>
     </li>      
-    <li><a href="#software-implementation">Software implementation</a></li>
-      <ul>
-        <li><a href="#hand-landmark-model">Hand Landmark Model</a></li>
-        <li><a href="#python-implementation">Python implementation</a></li>  
-      </ul>
-    <li><a href="#results">Results</a></li>
+    
     <li><a href="#conclusion">Conclusion</a></li>
     <li><a href="#contact">Contact</a></li>
     <li><a href="#acknowledgements">Acknowledgements</a></li>
@@ -24,257 +20,320 @@
   </ol>
 </details>
 
-## About the project
+## Introduction
+The I2C bit banging is a technique for serial communications using software instead of a dedicated hardware module. This means that the code controls the state of the MCU pins, related to all parameters of the signals: timing, levels and synchronization.
+Every I2C Hardware Device had its internal I2C bus drive for their specific use. So in this project i will implement a generic simple linux i2c bus driver that implements everything using Bit banging right from the START condition, STOP condition, Read ACKNWOLEGEMENT condition, etc 
 
-The use of a physical device for human-computer interaction, such as a mouse or keyboard, hinders natural interface since it creates a significant barrier between the user and the machine.  
-However, new sorts of HCI solutions have been developed as a result of the rapid growth of technology and software.  
-In this project , I have made use of a robust hand and finger tracking system ,which can efficiently track both hand and hand landmarks features , in order to make a fun Ninja fruit-like game.
+## Walking through the code:
 
-## Software Requirements:
+### APIs used for the I2C bus driver 
 
-### Python environment:
-
-* Python 3.9 
-* A python IDE , in my case I used [PyCharm](https://www.jetbrains.com/fr-fr/pycharm/).
-
-### Packages:
-* [OpenCV](https://opencv.org/course-opencv-for-beginners/#home) : OpenCV is the world's largest and most popular computer vision library . The library is cross-platform and free for use.
-* [MediaPipe](https://google.github.io/mediapipe/) : MediaPipe offers cross-platform, customizable ML solutions for live and streaming media. it will help us detect and track hands and handlandmarks features.
-* [Numpy](https://numpy.org/) : introducing support for large, multi-dimensional arrays and matrices, as well as a vast set of high-level mathematical functions to manipulate them.
-
-**NB**: All these packages need to be installed properly.
-
-## Software implementation:
-### Hand Landmark Model:
-For more details check this [Mediapipe hand tracking documentation](https://google.github.io/mediapipe/solutions/hands).
-![image](https://user-images.githubusercontent.com/86969450/135113891-c741aa31-7ef7-4a6b-8967-398a2bc003f8.png)  
-
-Following palm detection over the entire image, the hand landmark model uses regression to accomplish exact keypoint localization of 21 3D hand-knuckle coordinates within the detected hand regions, i.e. direct coordinate prediction.
-
-Concerning the MULTI_HAND_LANDMARKS: 
-Collection of detected/tracked hands, where each hand is represented as a list of 21 hand landmarks and each landmark is composed of x, y and z. x and y are normalized to [0.0, 1.0] by the image width and height respectively. z represents the landmark depth with the depth at the wrist being the origin, and the smaller the value the closer the landmark is to the camera. The magnitude of z uses roughly the same scale as x.
-
-### Python implementation:
-Now let's get to our code:  
-Let's begin with importing the required packages
-
- ```py
-import cv2 
-import time               # useful for calculating the FPS rate
-import random             # for spawning "fruits" at random positions and random colours
-import mediapipe as mp    # for hand detection and tracking
-import math               # for various mathematical calculations
-import numpy as np
- ``` 
-Now lets get our objects :
- ```py
-mp_drawing = mp.solutions.drawing_utils
-mp_drawing_styles = mp.solutions.drawing_styles
-mp_hands = mp.solutions.hands
-
-hands = mp_hands.Hands(False,1,0.7,0.5)
- ``` 
-The  `hands = mp_hands.Hands(False,1,0.7,0.5)` line is used to initialize a MediaPipe Hand object.  
-Its arguments are as follows:
-* **static_image_mode:** Whether to treat the input images as a batch of staticand possibly unrelated images, or a video stream. 
-* **max_num_hands:** Maximum number of hands to detect. 
-* **min_detection_confidence:** Minimum confidence value ([0.0, 1.0]) for hand detection to be considered successful. 
-* **min_tracking_confidence:** Minimum confidence value ([0.0, 1.0]) for the hand landmarks to be considered tracked successfully. 
-  
-now , the below variables will be needed to calcumate the FPS rate.
-
- ```py
-curr_Frame = 0
-prev_Frame = 0
-delta_time = 0
- ``` 
-Let's create and assign our gameplay variables:
- ```py
-next_Time_to_Spawn = 0   # variable to compute the time to spawn a "fruit".
-Speed = [0,5]            # Speed vector along the x , y axis
-Fruit_Size = 30          # radius of the circle representing the fruit
-Spawn_Rate = 1           # Spawning rate of "fruits" (Per second) initially at 1 fruit /s
-Score = 0                # Score initially at 0
-Lives = 15               # number of Lives initially at 15
-Difficulty_level= 1      # Difficulty level which will increase according to Score, initially at 1
-game_Over=False          # Whether the game is lost , initially false ofc.
- ``` 
+There are two structures that you need to use in order to write the i2c bus driver in the Linux kernel.
+* **Algorithm Structure**
+```c
  
-  ```py
- slash = np.array([[]],np.int32)   # a numpy array of arrays in order to keep track of the index finger positions in order to draw a curve representing the slash
-slash_Color=(255,255,255)         # initial slash color : white
-slash_length= 19                  # number of points to keep track of
+// I2C algorithm Structure
 
-w=h=0       # to store width and height of the frame
-Fruits=[]   # the list to keep track of the "fruits" on screen
- ``` 
- Now lets create our functions :
- lets begin with fruit spawning function:
+static struct i2c_algorithm MyDevice_i2c_algorithm = {
+  .smbus_xfer     = MyDevice_smbus_xfer,
+  .master_xfer    = MyDevice_i2c_xfer,
+  .functionality  = MyDevice_func,
+};
+```
+Where,
+
+<br > **master_xfer**   — Issue a set of i2c transactions to the given I2C adapter defined by the msgs array, with num messages available to transfer via the adapter specified by adap. This function will be called whenever we call I2C read-write APIs from the client driver.<br /> 
+<br > **smbus_xfer**   — Issue SMBus transactions to the given I2C adapter. If this is not present, then the bus layer will try and convert the SMBus calls into I2C transfers instead. This function will be called whenever we call SMBus read-write APIs from the client driver.<br /> 
+<br > **functionality** — Return the flags that this algorithm/adapter pair supports from the I2C_FUNC_* flags.<br /> 
+* Adapter Structure<br />
+This structure is used to identify a physical i2c bus along with the access algorithms necessary to access it.
+```c
  
-   ```py
- def Spawn_Fruits():
-    fruit = {}
-    random_x = random.randint(15,600)                                                   # x position of the fruit randomly generated
-    random_color = (random.randint(0,255),random.randint(0,255),random.randint(0,255))  # Colour of the fruit randomly generated
-    #cv2.circle(img,(random_x,440),Fruit_Size,random_color,-1)                           # uncomment to test the of spawning the fruit as a circle on random x position and on a 440 y position
-    fruit["Color"] = random_color                                                       
-    fruit["Curr_position"]=[random_x,440]
-    fruit["Next_position"] = [0,0]
-    Fruits.append(fruit)
- ``` 
-* Each fruit data is represented with a dictionary with the following keys : `"Color"` , `"Curr_position"` ,`"Next_position"` .
-* In order to keep track of each fruit after its creation it must be appended to the Fruit list 
-* Each fruit is generated at position of a 440 value on the y axis and a random position between 15 and 600 on the x axis
-* Each fruit is generated with a random colour of value between 0 and 255 on each of the rgb channels.
+// I2C adapter Structure
 
-Now let's move our "fruits":
-
-```py
-def Fruit_Movement(Fruits , speed):
-    global Lives
-
-    for fruit in Fruits:
-        if (fruit["Curr_position"][1]) < 20 or (fruit["Curr_position"][0]) > 650 :
-            Lives = Lives - 1
-            #print(Lives)
-            #print("removed ", fruit)
-            Fruits.remove(fruit)
-
-        cv2.circle(img,tuple(fruit["Curr_position"]),Fruit_Size,fruit["Color"],-1)
-        fruit["Next_position"][0]= fruit["Curr_position"][0] + speed[0] 
-        fruit["Next_position"][1]= fruit["Curr_position"][1] - speed[1] 
-
-        fruit["Curr_position"]=fruit["Next_position"]
- ``` 
-* For each fruit in our list : we check the position of the fruit :if its y position is below 20 then we decrement the Lives variable.  
-* Each fruit's next position is equals to it's previous position + speed.
-
-Lets get a function to calculate a distance between two 2d points :
-
-```py
-def distance(a , b):
-    x1 = a[0]
-    y1 = a[1]
-
-    x2 = b[0]
-    y2 = b[1]
-
-    d =math.sqrt(pow(x1 -x2,2)+pow(y1-y2,2))
-    return int(d)
-  ``` 
-Now let's get to the main part of the code:
+static struct i2c_adapter MyDevice_i2c_adapter = {
+  .owner  = THIS_MODULE,
+  .class  = I2C_CLASS_HWMON,//| I2C_CLASS_SPD,
+  .algo   = &MyDevice_i2c_algorithm,
+  .name   = ADAPTER_NAME,
+  .nr     = 5,
+};
+```
+Where,
+<br >***owner**      — Owner of the module(usually set this to THIS_MODULE).<br />
+<br >**class**      — the type of I2C class devices that this driver supports. Usually, this is set to any one of the I2C_CLASS_* based on our need.<br />
+<br >***algo**       — a pointer to the struct i2c_algorithm structure<br />
+<br >**nr**         — bus number which you want to create. This will be applicable only for i2c_add_numbered_adapter().<br />
+<br >**char name[I2C_NAME_SIZE]** — I2C bus driver name. This value shows up in the sysfs filename associated with this I2C adapter.<br />
+After you create the two structures, then we have to add the adapter to the i2c subsystem.
+* **Add the adapter to the subsystem**<br />
+```c
+static int __init MyDevice_driver_init(void)
+{
+  int ret = -1;
   
-```py  
-cap = cv2.VideoCapture(0)           # we set our pc webcam as our input
-while(cap.isOpened()):              # while the webcam is opened
-    success , img = cap.read()      # capture images
-    if not success:
-        print("skipping frame")
-        continue
-    h, w, c = img.shape             # get the dimensions of our image 
+  ret = i2c_add_numbered_adapter(&MyDevice_i2c_adapter);
+  
+  pr_info("Bus Driver Added!!!\n");
+  return ret;
+}
+```
+  **i2c_add_numbered_adapter**
+This API is used to register the adapter to the subsystem. But it assigns the number that we asked for if only it is available. We have to initialize the member called nr in the i2c_adapter structure before calling this.
+* **Delete the adapter from the subsystem**<br />
+```c
+static void __exit MyDevice_driver_exit(void)
+{
+  i2c_del_adapter(&MyDevice_i2c_adapter);
+  pr_info("Bus Driver Removed!!!\n");
+}
+```
+  **i2c_del_adapter**
+This API is used to unregister the adapter from the subsystem.
+### Implementation of the I2C communication by using the bitbanging method
+* Reading and writing (setting or resetting) the SCL,SDA GPIOs:
+* **Function to read the SCL GPIO**
+```c
+static bool MyDevice_I2C_Read_SCL(void)
+{
+  gpio_direction_input(SCL_GPIO);
+  return gpio_get_value(SCL_GPIO);
+}
+```
+* **Function to read the SDA GPIO**
+```c
+static bool MyDevice_I2C_Read_SDA(void)
+{
+  gpio_direction_input(SDA_GPIO);
+  return gpio_get_value(SDA_GPIO);
+}
+```
+* **Function to clear the SCL GPIO**
+```c
+static void MyDevice_I2C_Clear_SCL(void)
+{
+  gpio_direction_output(SCL_GPIO, 0);
+  gpio_set_value(SCL_GPIO, 0);
+}
+```
+* **Function to clear the SDA GPIO**
+```c
+static void MyDevice_I2C_Clear_SDA(void)
+{
+  gpio_direction_output(SDA_GPIO, 0);
+  gpio_set_value(SDA_GPIO, 0);
+}
+```
+* **Function to set the SCL GPIO**
+```c
+static void MyDevice_I2C_Set_SCL(void)
+{
+  gpio_direction_output(SCL_GPIO, 1);
+  gpio_set_value(SCL_GPIO, 1);
+}
+```
+* **Function to set the SDA GPIO**
+```c
+static void MyDevice_I2C_Set_SDA(void)
+{
+  gpio_direction_output(SDA_GPIO, 1);
+  gpio_set_value(SDA_GPIO, 1);
+}
+```
+### Initializing and Deinitializing the GPIOs:
+```c
+* **Function to Initialize the GPIOs**
+
+static int MyDevice_I2C_Init( void )
+{
+  int ret = 0;
+  do      //Break if any error
+  {
+    //Checking the SCL GPIO is valid or not
+    if(gpio_is_valid(SCL_GPIO) == false){
+          pr_err("SCL GPIO %d is not valid\n", SCL_GPIO);
+          ret = -1;
+          break;
+    }
+    //Checking the SDA GPIO is valid or not
+    if(gpio_is_valid(SDA_GPIO) == false){
+          pr_err("SDA GPIO %d is not valid\n", SDA_GPIO);
+          ret = -1;
+          break;
+    }
     
-    img = cv2.cvtColor(cv2.flip(img, 1), cv2.COLOR_BGR2RGB)  # we flip the img bc it's initially mirrored and convert it from BGR to RGB in order to process it correctly with mediapipe
-    img.flags.writeable = False     # To improve performance, optionally mark the image as not writeable to pass by reference.
-    results = hands.process(img)    # launch the detection and tracking process on our img and store the results in "results"
-    img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR) # reconvert the img to its initial BGR Color space
+    //Requesting the SCL GPIO
+    if(gpio_request(SCL_GPIO,"SCL_GPIO") < 0){
+          pr_err("ERROR: SCL GPIO %d request\n", SCL_GPIO);
+          ret = -1;
+          break;
+    }
     
-    if results.multi_hand_landmarks:                          #if a hand is detected
-        for hand_landmarks in results.multi_hand_landmarks:
-            mp_drawing.draw_landmarks(                        # draw the landmarks 
-                img,
-                hand_landmarks,
-                mp_hands.HAND_CONNECTIONS,
-                mp_drawing_styles.get_default_hand_landmarks_style(),
-                mp_drawing_styles.get_default_hand_connections_style())
+    // configure the SCL GPIO as output, We will change the direction later as per our need
+    
+    gpio_direction_output(SCL_GPIO, 1);
+    /*
+    ** configure the SDA GPIO as output, We will change the 
+    ** direction later as per our need.
+    */
+    gpio_direction_output(SDA_GPIO, 1);
+  } while(false);
+  return ret;  
+}
+```
+* **Function to Deinitialize the GPIOs*
+```c
+static void MyDevice_I2C_DeInit( void )
+{
+  //free both the GPIOs
+  gpio_free(SCL_GPIO);
+  gpio_free(SDA_GPIO);
+}
+```
+### Starting and Stopping conditions:
 
-            #**************************************************************************************
-            for id , lm in enumerate(hand_landmarks.landmark): 
-                if id == 8:                                       # id = 8 corresponds with the tip of the index finger
-                    index_pos=(int(lm.x * w) ,int(lm.y * h))      # store the position of the index figer along the x and y axis
-                                                                  # each hand is represented as a list of 21 hand landmarks and each landmark is composed of x, y and z. x and y are normalized to [0.0, 1.0] by the image width and height respectively. 
-                                                                  #so in order to get the correct position we mutiply the x and y by the width and height of our image
-                    cv2.circle(img,index_pos,18,slash_Color,-1)   
-                    #slash=np.delete(slash,0)
-                    slash=np.append(slash,index_pos)              # apped the position of the index in a numpy array
-
-                    while len(slash) >= slash_length:             # keep the length of the slash array constant
-                        slash = np.delete(slash , len(slash) -slash_length , 0)
-
-                    for fruit in Fruits:                              
-                        d= distance(index_pos,fruit["Curr_position"])           #calculate the distance between the index finger tip and each of the fruits
-                        cv2.putText(img,str(d),fruit["Curr_position"],cv2.FONT_HERSHEY_SIMPLEX,2,(0,0,0),2,3)
-                        if(d < Fruit_Size):                                     # if distance < size of the fruit the the fruit is "cut"
-                            Score= Score + 100                                  # the score increments by 100
-                            slash_Color = fruit["Color"]                        # the slash takes the color of the last fruit "cut"
-                            Fruits.remove(fruit)                                # remove the fruit that was cut from the list of fruits
-
-
-            #***********************************************************************************************************
+This functioning conditions are translated as:
+* **Function to send the START condition**
+```c
+ static void MyDevice_I2C_Sart( void )
+{
+  MyDevice_I2C_Set_SDA();
+  MyDevice_I2C_Set_SCL();
+  I2C_DELAY;
+  MyDevice_I2C_Clear_SDA();
+  I2C_DELAY;  
+  MyDevice_I2C_Clear_SCL();
+  I2C_DELAY;  
+}
+```
+* **Function to send the STOP condition**
+```c
+ static void MyDevice_I2C_Stop( void )
+{
+  MyDevice_I2C_Clear_SDA();
+  I2C_DELAY;
+  MyDevice_I2C_Set_SCL();
+  I2C_DELAY;
+  MyDevice_I2C_Set_SDA();
+  I2C_DELAY;
+  MyDevice_I2C_Clear_SCL();
+}
+```
+### Checking ACK/NACK:
+Function to reads the SDA to get the status and Returns 0 for NACK, returns 1 for ACK
+```c
+static int MyDevice_I2C_Read_NACK_ACK( void )
+{
+  int ret = 1;
+  //reading ACK/NACK
+  I2C_DELAY;
+  MyDevice_I2C_Set_SCL();
+  I2C_DELAY;
+  if( MyDevice_I2C_Read_SDA() )      //check for ACK/NACK
+  {
+    ret = 0;
+  }
+  MyDevice_I2C_Clear_SCL();
+  return ret;
+}
+```
+### Sending adress:
+Function to send the 7-bit address to the slave 
+```c
+static int MyDevice_I2C_Send_Addr( u8 byte, bool is_read )
+{
+  int ret   = -1;
+  u8  bit;
+  u8  i     = 0;
+  u8  size  = 7;
+  //Writing 7bit slave address
+  for(i = 0; i < size ; i++)
+  {
+    bit = ( ( byte >> ( size - ( i + 1 ) ) ) & 0x01 );  //store MSB value
+    (bit) ? MyDevice_I2C_Set_SDA() : MyDevice_I2C_Clear_SDA();    //write MSB value     
+    I2C_DELAY;
+    MyDevice_I2C_Set_SCL();
+    I2C_DELAY;
+    MyDevice_I2C_Clear_SCL();
+  }
+  // Writing Read/Write bit (8th bit)
+  (is_read) ? MyDevice_I2C_Set_SDA() :MyDevice_I2C_Clear_SDA();  //read = 1, write = 0
+  I2C_DELAY;
+  MyDevice_I2C_Set_SCL();
+  I2C_DELAY;
+  MyDevice_I2C_Clear_SCL();
+  I2C_DELAY;
+  if( MyDevice_I2C_Read_NACK_ACK() )
+  {
+    //got ACK
+    ret = 0;
+  }
+  return ret;
+}
+```
+ ### Writing a byte to the slave function:
+```c
+ static int MyDevice_I2C_Send_Byte( u8 byte )
+{
+  int ret   = -1;
+  u8  bit;
+  u8  i     = 0;
+  u8  size  = 7;
+  for(i = 0; i <= size ; i++)
+  {
+    bit = ( ( byte >> ( size - i ) ) & 0x01 );        //store MSB value
+    (bit) ? MyDevice_I2C_Set_SDA() : MyDevice_I2C_Clear_SDA();  //write MSB value     
+    I2C_DELAY;
+    MyDevice_I2C_Set_SCL();
+    I2C_DELAY;
+    MyDevice_I2C_Clear_SCL();
+  }
   
-      if Score % 1000 ==0 and Score != 0:        #each time the score is a multiple of 1000 (1000 , 2000 etc ..)
-        Difficulty_level = (Score / 1000) + 1    # Difficulty level increments by 1 for every 1000 score
-        Difficulty_level= int(Difficulty_level)  # convert it to integer value
-        print(Difficulty_level)
-        Spawn_Rate =  Difficulty_level * 4/5     # Spawn rate increases by 80 %
-        Speed[0] = Speed[0] * Difficulty_level   
-        Speed[1] = int(5 * Difficulty_level /2) # speed increases by 250 %
-        print(Speed)
+  if( MyDevice_I2C_Read_NACK_ACK() )
+  {
+    //got ACK
+    ret = 0;
+  }
+  return ret;
+}
+```
+### Reading a byte from the slave function:
+```c
+static bool  MyDevice_I2C_Read_bit(  ){
+  bool i;
 
-#*****************************************************************************
-#*****************************************************************************
-
-    if(Lives<=0):  # if u run out of lives the game is over
-        game_Over=True
-
-    slash=slash.reshape((-1,1,2))                     # reshape the slash array in order to draw a polyline a visualize the slash
-    cv2.polylines(img,[slash],False,slash_Color,15,0) # draw the slash
-
-    curr_Frame = time.time()
-    delta_Time = curr_Frame - prev_Frame
-    FPS = int(1/delta_Time)                 #calculating the fps
-    cv2.putText(img,"FPS : " +str(FPS),(int(w*0.82),50),cv2.FONT_HERSHEY_SIMPLEX,0.6,(0,250,0),2)                 #printing the fps on the screen
-    cv2.putText(img,"Score: "+str(Score),(int(w*0.35),90),cv2.FONT_HERSHEY_SIMPLEX,1,(255,0,0),5)                 #printing the score on the screen
-    cv2.putText(img,"Level: "+str(Difficulty_level),(int(w*0.01),90),cv2.FONT_HERSHEY_SIMPLEX,1,(255,0,150),5)    #printing the Level on the screen
-    cv2.putText(img,"Lives remaining : " + str(Lives), (200, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)  #printing remaining lives on the screen
-
-
-    prev_Frame = curr_Frame
-
-    #***********************************************************
-    if not (game_Over):                               # if the game is still not over then keep spawning and moving the fruits
-        if  (time.time() > next_Time_to_Spawn):       
-            Spawn_Fruits()
-            next_Time_to_Spawn = time.time() + (1 / Spawn_Rate)
-
-        Fruit_Movement(Fruits,Speed)
-
-
-    else:                                     # if game is over then print it and clear all the fruits
-        cv2.putText(img, "GAME OVER", (int(w * 0.1), int(h * 0.6)), cv2.FONT_HERSHEY_SIMPLEX, 3, (0, 0, 255), 3)
-        Fruits.clear()
-        
-    cv2.imshow("img", img)                    #display the resulting image
-
-    if cv2.waitKey(5) & 0xFF == ord("q"):     # the "q" button to quit
-        break
-
-cap.release()                                 # release the webcam
-cv2.destroyAllWindows()
-
-  ``` 
-  ## Results:
+  MyDevice_I2C_Read_SDA();
+  I2C_DELAY();
+  while (MyDevice_I2C_Read_SCL() == 0){
+    I2C_SLEEP();
+  }
+  i= MyDevice_I2C_Read_SDA();
+  I2C_DELAY();
+  MyDevice_I2C_Clear_SCL();
+  return i;
+}
+static int MyDevice_I2C_Read_Byte( u8 *byte )
+{
+  int ret = 0;
   
-  ![results](https://github.com/mohamedamine99/Ninja-Fruit-Like-Game-with-hand-gesture-and-opencv/blob/main/results.gif)
-  
+ unsigned bit;
+    for (bit = 0; bit < 8; bit++)
+    {
+        *byte = (*byte << 1) | MyDevice_I2C_Read_bit();
+    }
+if (sizeof(*byte)!=sizeof(u8)){
+  ret=-1;
+}
+  return ret;
+}
+```          
   ## Conclusion:
 In this project, we successfullty detected and tracked a hand and its landmarks ,using the mediapipe module, and were able to extract data in order to create an interactive hand gesture mini-game with basic gameplay features such as  score , difficulty level and losing conditions.
   
   ### Contact:
-* Mail : mohamedamine.benabdeljelil@insat.u-carthage.tn -- mohamedaminebenjalil@yahoo.fr
-* Linked-in profile: https://www.linkedin.com/in/mohamed-amine-ben-abdeljelil-86a41a1a9/
+* Mail : ali.mahjoub1998@gmail.com 
+* Linked-in profile: https://www.linkedin.com/in/ali-mahjoub-b83a86196/
 
 ### Acknowledgements:
-* Google developers for making the [Mediapipe hand tracking module](https://google.github.io/mediapipe/solutions/hands)
-* OpenCV team for making the awesome [Opencv Library](https://opencv.org/)
-* [NumPy Team](https://numpy.org/gallery/team.html) for making the [Numpy Library](https://numpy.org/about/)
-  
+* The Embetronicx admins: https://embetronicx.com/
+
