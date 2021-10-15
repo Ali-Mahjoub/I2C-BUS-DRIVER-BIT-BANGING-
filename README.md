@@ -12,7 +12,6 @@
         <li><a href="#implementation-of-the-i2c-communication-by-using-the-bitbanging-method">Implementation of the I2C communication by using the bit-banging method</a></li>
       </ul>
     </li>      
-    
     <li><a href="#conclusion">Conclusion</a></li>
     <li><a href="#contact">Contact</a></li>
     <li><a href="#acknowledgements">Acknowledgements</a></li>
@@ -195,7 +194,7 @@ static void MyDevice_I2C_DeInit( void )
 This functioning conditions are translated as:
 * **Function to send the START condition**
 ```c
- static void MyDevice_I2C_Sart( void )
+ static void MyDevice_I2C_Start( void )
 {
   MyDevice_I2C_Set_SDA();
   MyDevice_I2C_Set_SCL();
