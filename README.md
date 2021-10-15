@@ -1,5 +1,5 @@
 # I2C-BUS-DRIVER(BIT-BANGING)
-![results_1](https://github.com/Ali-Mahjoub/azertyu/blob/main/images/images.jpg)
+![results_1](https://github.com/Ali-Mahjoub/azertyu/blob/main/images/linux_i2c_subsystem.png)
 
 <!-- TABLE OF CONTENTS -->
 <details open="open">
@@ -191,7 +191,7 @@ static void MyDevice_I2C_DeInit( void )
 }
 ```
 ### Starting and Stopping conditions:
-
+![results_1](https://github.com/Ali-Mahjoub/azertyu/blob/main/images/i2c_start_stop_condition.jpg)
 This functioning conditions are translated as:
 * **Function to send the START condition**
 ```c
@@ -221,6 +221,7 @@ This functioning conditions are translated as:
 ```
 ### Checking ACK/NACK:
 Function to reads the SDA to get the status and Returns 0 for NACK, returns 1 for ACK
+![results_1](https://github.com/Ali-Mahjoub/azertyu/blob/main/images/ack-nack.png?style=centerme)
 ```c
 static int MyDevice_I2C_Read_NACK_ACK( void )
 {
@@ -328,7 +329,7 @@ if (sizeof(*byte)!=sizeof(u8)){
 }
 ```          
   ## Conclusion:
-In this project, we successfullty detected and tracked a hand and its landmarks ,using the mediapipe module, and were able to extract data in order to create an interactive hand gesture mini-game with basic gameplay features such as  score , difficulty level and losing conditions.
+i impelemented through this snippet of code a simple I2C bus driver using the bit_banging method that can be utilized do interface with any kind of darware that communicates via the I2C protocol 
   
   ### Contact:
 * Mail : ali.mahjoub1998@gmail.com 
